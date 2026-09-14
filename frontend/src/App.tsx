@@ -16,11 +16,16 @@ const Admin = lazy(() => import('./features/Admin'));
 
 type View = 'library' | 'book' | 'player' | 'admin' | 'login';
 
+const VALID_VIEWS: View[] = ['library', 'book', 'player', 'admin', 'login'];
+
 export default function App() {
   // authing: 启动时校验登录态的中间态，避免已登录用户看到登录页闪烁
   const [authing, setAuthing] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [view, setView] = useState<View>('library');
+  // user 的 latest-ref：popstate 回调读取最新登录态做守卫，避免闭包过期
+  const userRef = useRef<any>(null);
+  userRef.current = user;
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [epIndex, setEpIndex] = useState(0);
@@ -62,9 +67,33 @@ export default function App() {
     saveUserSettings({ autoNext: v }).catch(() => {});
   }, []);
 
-  const handlePlay = useCallback((ep: Episode, idx: number, startPos = 0) => {
-    setEpIndex(idx); playerRef.current?.play(ep, startPos); setView('player');
+  // --- 浏览器历史集成：视图切换压入历史栈 ---
+  // 手机 PWA/浏览器的返回键 = history.back()，若不压栈会直接跳出应用。
+  // 前进导航用 navigate（pushState），应用内返回按钮用 goBack（真实回退，与返回键行为一致）。
+  const navigate = useCallback((v: View) => {
+    setView(v);
+    history.pushState({ view: v }, '');
   }, []);
+
+  const goBack = useCallback(() => history.back(), []);
+
+  // popstate：返回键回退时恢复目标视图（带登录态与管理员权限守卫）
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      const v = (e.state as { view?: View } | null)?.view;
+      let next: View = v && VALID_VIEWS.includes(v) ? v : 'library';
+      if (!userRef.current) next = 'login'; // 未登录时任何回退都落在登录页
+      else if (next === 'admin' && userRef.current.role !== 'admin') next = 'library';
+      setView(next);
+    };
+    window.addEventListener('popstate', onPop);
+    history.replaceState({ view: 'library' }, '');
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const handlePlay = useCallback((ep: Episode, idx: number, startPos = 0) => {
+    setEpIndex(idx); playerRef.current?.play(ep, startPos); navigate('player');
+  }, [navigate]);
 
   // 连播回调：当前集播放结束时，如果开启连播且有下一集，自动切至下一集并播放
   const handleAutoNext = useCallback(() => {
@@ -93,9 +122,9 @@ export default function App() {
   }, [isDark]);
 
   const handleLogout = useCallback(() => {
-    apiLogout(); setUser(null); setView('login');
+    apiLogout(); setUser(null); navigate('login');
     document.title = '有声书播放器';
-  }, []);
+  }, [navigate]);
 
   // Token 过期全局处理：任意请求收到 401 → 清登录态回登录页
   useEffect(() => { setOnUnauthorized(handleLogout); }, [handleLogout]);
@@ -124,19 +153,22 @@ export default function App() {
   }, [player]);
 
   const handleLoginSuccess = useCallback((u: any) => {
-    setUser(u); setView('library');
+    setUser(u); navigate('library');
     // 登录后立即拉取偏好（倍速/主题/连播/快进快退），避免不同步
     getUserSettings().then(applyUserSettings).catch(() => {});
-  }, [applyUserSettings]);
+  }, [applyUserSettings, navigate]);
 
   const handleOpen = useCallback((book: Book, eps: Episode[]) => {
-    setSelectedBook(book); setEpisodes(eps); setView('book');
-  }, []);
+    setSelectedBook(book); setEpisodes(eps); navigate('book');
+  }, [navigate]);
 
   const handleResume = useCallback((book: Book, eps: Episode[], idx: number, pos: number) => {
     setSelectedBook(book); setEpisodes(eps); setEpIndex(idx);
-    player.play(eps[idx], pos); setView('player');
-  }, [player]);
+    // 模拟 library→book→player 的浏览路径：多压一层 book 历史，
+    // 使播放页返回键（history.back）回到书籍目录而非书库
+    history.pushState({ view: 'book' }, '');
+    player.play(eps[idx], pos); navigate('player');
+  }, [player, navigate]);
 
   const switchEpisode = useCallback(async (targetIdx: number) => {
     const targetEp = episodes[targetIdx];
@@ -231,12 +263,12 @@ export default function App() {
             有声书
           </span>
           <div className="flex items-center gap-1.5 ml-2">
-            <button onClick={() => setView('library')} className={navBtn(view === 'library')}>
+            <button onClick={() => navigate('library')} className={navBtn(view === 'library')}>
               <BookOpenIcon className="w-4 h-4" /> 书库
             </button>
             {/* 管理入口仅管理员可见，避免普通用户误入看到 403 报错 */}
             {isAdmin && (
-              <button onClick={() => setView('admin')} className={navBtn(view === 'admin')}>
+              <button onClick={() => navigate('admin')} className={navBtn(view === 'admin')}>
                 <SettingsIcon className="w-4 h-4" /> 管理
               </button>
             )}
@@ -267,8 +299,8 @@ export default function App() {
       {/* 内容区内部滚动：MiniPlayer 始终固定在视口底部，不随内容长度被推到文档底 */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {view === 'library' && <Library onOpen={handleOpen} onResume={handleResume} />}
-        {view === 'book' && selectedBook && <BookDetail book={selectedBook} episodes={episodes} onPlay={handlePlay} onBack={() => setView('library')} onBookUpdated={(b) => setSelectedBook(b)} onEpisodesUpdated={setEpisodes} canEdit={isAdmin} />}
-        {view === 'player' && <PlayerView player={player} episodes={episodes} epIndex={epIndex} bookTitle={selectedBook?.title || ''} onPlay={handlePlay} onPrev={handlePrev} onNext={handleNext} onBack={() => setView(selectedBook ? 'book' : 'library')} coverBookId={selectedBook?.id || ''} onRateChange={handleRateChange} autoNext={autoNext} onAutoNextChange={handleAutoNextChange} skipSec={skipSec} />}
+        {view === 'book' && selectedBook && <BookDetail book={selectedBook} episodes={episodes} onPlay={handlePlay} onBack={goBack} onBookUpdated={(b) => setSelectedBook(b)} onEpisodesUpdated={setEpisodes} canEdit={isAdmin} />}
+        {view === 'player' && <PlayerView player={player} episodes={episodes} epIndex={epIndex} bookTitle={selectedBook?.title || ''} onPlay={handlePlay} onPrev={handlePrev} onNext={handleNext} onBack={goBack} coverBookId={selectedBook?.id || ''} onRateChange={handleRateChange} autoNext={autoNext} onAutoNextChange={handleAutoNextChange} skipSec={skipSec} />}
         {view === 'admin' && isAdmin && (
           <Suspense fallback={<div className="text-center py-20 text-slate-500 dark:text-slate-400 text-sm">加载管理页...</div>}>
             <Admin />
@@ -282,7 +314,7 @@ export default function App() {
           player={player}
           bookTitle={selectedBook?.title || ''}
           coverBookId={selectedBook?.id || ''}
-          onOpenPlayer={() => setView('player')}
+          onOpenPlayer={() => navigate('player')}
           onPrev={handlePrev}
           onNext={handleNext}
         />

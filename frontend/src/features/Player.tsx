@@ -188,7 +188,7 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
         )}
 
         <div className="flex flex-wrap justify-center gap-2 mt-6 max-w-xs">
-          {[0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0].map(r => (
+          {[0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5, 1.6, 1.75, 2.0, 2.5, 3.0].map(r => (
             <button key={r} onClick={() => handleSetRate(r)}
               className={`px-3 py-1 text-xs font-semibold rounded-full transition ${rate === r ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>{r}x</button>
           ))}
