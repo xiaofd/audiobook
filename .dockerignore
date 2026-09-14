@@ -1,0 +1,41 @@
+# 构建产物与依赖（镜像内重新构建，无需进入上下文）
+build/
+build/bin/
+dist-bin/
+frontend/dist/
+cmd/web/dist/
+frontend/node_modules/
+
+# 运行数据与敏感信息（严禁进入构建上下文：含数据库与加密凭据）
+data/
+**/data/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+*.local
+secrets/
+*.pem
+*.key
+.machine.key
+
+# 版本控制与 IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 文档与本地脚本（运行镜像不需要）
+*.md
+build.bat
+docker-compose.yml
+Dockerfile
+.dockerignore
+testdata/
+
+# 日志与临时文件
+*.log
+*.tmp

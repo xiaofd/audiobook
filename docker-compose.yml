@@ -1,0 +1,23 @@
+services:
+  audiobook:
+    build: .
+    container_name: audiobook
+    ports:
+      - "8080:8080"
+    volumes:
+      # 数据目录：SQLite 数据库、加密凭据（.machine.key）、config.json
+      - ./data:/data
+    environment:
+      # 可选：固定加密密钥（多副本/重建容器时凭据仍可解密）；
+      # 不设置时自动生成 /data/.machine.key，随数据卷持久化
+      # - AUDIOBOOK_SECRET_KEY=change-me-to-a-random-string
+      # 可选：修改监听端口（容器内）
+      # - AUDIOBOOK_PORT=8080
+    restart: unless-stopped
+    # 健康检查（配合镜像内 HEALTHCHECK，compose 层显式声明便于编排工具读取）
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

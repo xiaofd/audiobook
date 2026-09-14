@@ -1,0 +1,31 @@
+build/bin/
+dist-bin/
+frontend/dist
+frontend/node_modules
+cmd/web/dist
+frontend/package.json.md5
+
+# 数据与敏感信息
+data/
+**/data/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+*.local
+secrets/
+*.pem
+*.key
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 日志与临时文件
+*.log
+*.tmp
+server.log
+server.err.log

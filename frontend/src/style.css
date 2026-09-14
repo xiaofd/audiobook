@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* 跟随主题切换：亮色模式下原生控件（滚动条/range/下拉）按浅色渲染 */
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #0b0f17;
+  color: #f3f4f6;
+  -webkit-font-smoothing: antialiased;
+}
+
+html:not(.dark) body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* 统一深色下拉选项 */
+.dark select option {
+  background-color: #1e293b;
+  color: #f8fafc;
+}
+
+/* 统一浅色下拉选项 */
+html:not(.dark) select option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+/* Toast 入场动画 */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
