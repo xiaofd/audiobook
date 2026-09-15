@@ -17,8 +17,8 @@ import (
 
 // Version 版本号
 var (
-	Version   = "1.3.0"
-	BuildTime = "2026-09-14"
+	Version   = "1.4.0"
+	BuildTime = "2026-09-15"
 )
 
 //go:embed all:dist
