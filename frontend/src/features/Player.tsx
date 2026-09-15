@@ -226,12 +226,15 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
         </div>
       </div>
 
-      {/* 章节队列抽屉：切集无需返回详情页 */}
+      {/* 章节队列抽屉：切集无需返回详情页。
+          定位用 flex 居中而非 translate：入场动画的 transform 会覆盖 Tailwind 的
+          translate 工具类，导致动画期间面板偏在右下、结束后才跳回中央 */}
       {showQueue && (
         <div className="fixed inset-0 z-50" onClick={() => setShowQueue(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="absolute inset-x-0 bottom-0 max-h-[70vh] sm:inset-x-auto sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col animate-[toast-in_.25s_ease-out]"
-            onClick={e => e.stopPropagation()}>
+          <div className="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center">
+            <div className="max-h-[70vh] w-full sm:max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col animate-[toast-in_.25s_ease-out]"
+              onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">章节列表 · 共 {episodes.length} 集</h3>
               <button onClick={() => setShowQueue(false)} className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
@@ -275,6 +278,7 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
               )}
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>
