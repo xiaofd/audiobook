@@ -17,7 +17,7 @@ import (
 
 // Version 版本号
 var (
-	Version   = "1.4.0"
+	Version   = "1.4.1"
 	BuildTime = "2026-09-15"
 )
 
