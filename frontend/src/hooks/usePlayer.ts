@@ -45,7 +45,8 @@ export function usePlayer(onEndedCallback?: () => void) {
     audio.load();
     audio.playbackRate = rateRef.current;
     const onLoaded = () => {
-      if (t > 0) audio.currentTime = t;
+      // clamp 到实际时长：lastGoodTime 可能超出当前文件（跨集残留/时长变化）
+      if (t > 0) audio.currentTime = Math.min(t, audio.duration || t);
       audio.play().catch(() => {});
       audio.removeEventListener('loadeddata', onLoaded);
     };
@@ -146,6 +147,8 @@ export function usePlayer(onEndedCallback?: () => void) {
     retryCountRef.current = 0;
     setRetryCount(0);
     setNetState('ok');
+    // 重置"最后已知进度"：否则新集首次断流自愈会 seek 到上一集的进度（可能超出新集长度）
+    lastGoodTimeRef.current = startPosRef.current;
     audio.src = streamUrl(currentEpisode.id);
     audio.load();
     audio.playbackRate = rate;
@@ -318,8 +321,13 @@ export function usePlayer(onEndedCallback?: () => void) {
     const id = window.setInterval(() => {
       const audio = audioRef.current;
       if (!audio) return;
-      // 状态脱钩：界面在播但 audio 实际已暂停（非自然结束）→ 直接续播
-      if (audio.paused && !audio.ended) { audio.play().catch(() => {}); return; }
+      // 状态脱钩：界面在播但 audio 实际已暂停（非自然结束）→ 直接续播。
+      // 网络自愈进行中（retryCount>0）不干预：error 态元素上 play() 会再触发 error，
+      // 使退避计数虚增、提前进入 failed 态。
+      if (audio.paused && !audio.ended && retryCountRef.current === 0) {
+        audio.play().catch(() => {});
+        return;
+      }
       const ct = currentTimeRef.current;
       // 播放看门狗：playing 态但进度连续 ~10s 停滞（移动端偶发"假播放"：
       // play() 成功但实际卡住且不触发 error 事件）→ 复用网络自愈重载恢复。

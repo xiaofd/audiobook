@@ -36,11 +36,12 @@ export default function BookDetail({ book, episodes, onPlay, onBack, onBookUpdat
   // 而非"第一个未听完"——用户可能中途跳集，部分收听的旧集不应被误当作当前进度。
   // 最近一集已听完：有下一集则从下一集开头继续；已是最后一集则不显示（全书完）。
   const resumeInfo = useMemo(() => {
-    let last: { epId: string; updatedAt: string } | null = null;
+    // 数值化比较 updatedAt：RFC3339 带时区偏移，字符串字典序在跨时区数据下不可靠
+    let last: { epId: string; at: number } | null = null;
     for (const [epId, prog] of Object.entries(progressMap)) {
       if (prog.position <= 0 && !prog.isFinished) continue;
-      const ua = prog.updatedAt || '';
-      if (!last || ua > last.updatedAt) last = { epId, updatedAt: ua };
+      const at = Date.parse(prog.updatedAt || '') || 0;
+      if (!last || at > last.at) last = { epId, at };
     }
     if (!last) return null;
     const idx = episodes.findIndex(e => e.id === last!.epId);
