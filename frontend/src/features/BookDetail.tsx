@@ -9,7 +9,7 @@ export default function BookDetail({ book, episodes, onPlay, onBack, onBookUpdat
   book: Book; episodes: Episode[]; onPlay: (ep: Episode, idx: number, pos: number) => void; onBack: () => void; onBookUpdated?: (b: Book) => void;
   onEpisodesUpdated?: (eps: Episode[]) => void; canEdit?: boolean;
 }) {
-  const [progressMap, setProgressMap] = useState<Record<string, { position: number; duration: number; isFinished: boolean }>>({});
+  const [progressMap, setProgressMap] = useState<Record<string, { position: number; duration: number; isFinished: boolean; updatedAt?: string }>>({});
   const [showEdit, setShowEdit] = useState(false);
   const [eTitle, setETitle] = useState(book.title);
   const [eAuthor, setEAuthor] = useState(book.author);
@@ -26,24 +26,31 @@ export default function BookDetail({ book, episodes, onPlay, onBack, onBookUpdat
   useEffect(() => {
     setPage(0); // 切书重置分页
     getProgress(undefined, book.id).then(data => {
-      const map: Record<string, { position: number; duration: number; isFinished: boolean }> = {};
-      if (Array.isArray(data)) for (const p of data as any[]) map[p.episodeId] = { position: p.position || 0, duration: p.duration || 0, isFinished: !!p.isFinished };
+      const map: Record<string, { position: number; duration: number; isFinished: boolean; updatedAt?: string }> = {};
+      if (Array.isArray(data)) for (const p of data as any[]) map[p.episodeId] = { position: p.position || 0, duration: p.duration || 0, isFinished: !!p.isFinished, updatedAt: p.updatedAt };
       setProgressMap(map);
     }).catch(() => {});
   }, [book.id]);
 
-  // 最近收听的分集（继续收听横幅）：按进度数据在分集列表中定位
+  // 继续收听横幅：取"最近实际收听"的那一集（按 updatedAt 最新），
+  // 而非"第一个未听完"——用户可能中途跳集，部分收听的旧集不应被误当作当前进度。
+  // 最近一集已听完：有下一集则从下一集开头继续；已是最后一集则不显示（全书完）。
   const resumeInfo = useMemo(() => {
-    let best: { ep: Episode; idx: number; pos: number } | null = null;
-    for (let i = 0; i < episodes.length; i++) {
-      const prog = progressMap[episodes[i].id];
-      if (prog && prog.position > 0 && !prog.isFinished) {
-        // 列表按顺序，取第一个未听完且有进度的分集
-        best = { ep: episodes[i], idx: i, pos: prog.position };
-        break;
-      }
+    let last: { epId: string; updatedAt: string } | null = null;
+    for (const [epId, prog] of Object.entries(progressMap)) {
+      if (prog.position <= 0 && !prog.isFinished) continue;
+      const ua = prog.updatedAt || '';
+      if (!last || ua > last.updatedAt) last = { epId, updatedAt: ua };
     }
-    return best;
+    if (!last) return null;
+    const idx = episodes.findIndex(e => e.id === last!.epId);
+    if (idx < 0) return null;
+    const prog = progressMap[last.epId];
+    if (prog.isFinished) {
+      if (idx + 1 < episodes.length) return { ep: episodes[idx + 1], idx: idx + 1, pos: 0 };
+      return null;
+    }
+    return { ep: episodes[idx], idx, pos: prog.position };
   }, [episodes, progressMap]);
 
   const handlePlay = (ep: Episode, idx: number) => onPlay(ep, idx, progressMap[ep.id]?.position || 0);
@@ -148,8 +155,8 @@ export default function BookDetail({ book, episodes, onPlay, onBack, onBookUpdat
           <span className="flex-1 min-w-0 text-left">
             <span className="block text-sm font-bold truncate">{resumeInfo.ep.title}</span>
             <span className="block text-xs text-indigo-100/90 mt-0.5">
-              继续收听 · 第 {resumeInfo.idx + 1} 集 · 已听 {fmt(resumeInfo.pos)}
-              {progressMap[resumeInfo.ep.id]?.duration > 0 && ` / ${fmt(progressMap[resumeInfo.ep.id].duration)}`}
+              继续收听 · 第 {resumeInfo.idx + 1} 集 · {resumeInfo.pos > 0 ? `已听 ${fmt(resumeInfo.pos)}` : '从头播放'}
+              {resumeInfo.pos > 0 && progressMap[resumeInfo.ep.id]?.duration > 0 && ` / ${fmt(progressMap[resumeInfo.ep.id].duration)}`}
             </span>
           </span>
           <span className="text-xs font-semibold shrink-0 opacity-80">▶ 播放</span>

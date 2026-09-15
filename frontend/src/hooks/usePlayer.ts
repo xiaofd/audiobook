@@ -77,12 +77,52 @@ export function usePlayer(onEndedCallback?: () => void) {
     reloadAtLastPos();
   }, [clearRetryTimer, reloadAtLastPos]);
 
+  // --- 外部打断自动恢复（来电、其他应用抢占音频焦点）---
+  // 被打断时 audio 触发 pause 事件但并非用户操作；打断结束后无任何事件通知，
+  // 只能轮询尝试续播。用户主动暂停（userPaused）绝不自动恢复。
+  const userPausedRef = useRef(false);   // 用户主动暂停标记
+  const interruptedRef = useRef(false);  // 被外部打断，等待恢复
+  const resumeTimerRef = useRef<number | null>(null);
+  const resumeAttemptsRef = useRef(0);
+
+  const stopResumeRetry = useCallback(() => {
+    if (resumeTimerRef.current !== null) {
+      clearInterval(resumeTimerRef.current);
+      resumeTimerRef.current = null;
+    }
+    interruptedRef.current = false;
+    resumeAttemptsRef.current = 0;
+  }, []);
+
+  const tryResume = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || !interruptedRef.current || userPausedRef.current) return;
+    // 焦点仍被占用（通话中/其他应用在播）时 play() 会 reject，静默等待下次重试
+    audio.play().catch(() => {});
+  }, []);
+
+  const startResumeRetry = useCallback(() => {
+    if (resumeTimerRef.current !== null) return; // 已在重试中
+    interruptedRef.current = true;
+    resumeAttemptsRef.current = 0;
+    resumeTimerRef.current = window.setInterval(() => {
+      if (!interruptedRef.current || userPausedRef.current) { stopResumeRetry(); return; }
+      resumeAttemptsRef.current += 1;
+      // 页面在后台时最多重试 ~60s：避免用户主动切去别的音乐应用后持续抢焦点；
+      // 页面可见（用户正看着本应用）则持续重试直至恢复
+      if (document.hidden && resumeAttemptsRef.current > 20) { stopResumeRetry(); return; }
+      tryResume();
+    }, 3000);
+  }, [stopResumeRetry, tryResume]);
+
   const play = useCallback((ep: Episode, startPos = 0) => {
     startPosRef.current = startPos;
+    userPausedRef.current = false; // 新播放请求：解除暂停标记并停止恢复轮询
+    stopResumeRetry();
     setCurrentEpisode(ep);
     setPlaying(true);
     setPlayId(id => id + 1);
-  }, []);
+  }, [stopResumeRetry]);
 
   // 当 currentEpisode 变化或 playId 变化时，设置 src 并播放。
   useEffect(() => {
@@ -109,13 +149,14 @@ export function usePlayer(onEndedCallback?: () => void) {
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (audio.paused) { audio.play().catch(() => {}); setPlaying(true); }
-    else { audio.pause(); setPlaying(false); }
+    if (audio.paused) { userPausedRef.current = false; audio.play().catch(() => {}); setPlaying(true); }
+    else { userPausedRef.current = true; audio.pause(); setPlaying(false); }
   }, []);
 
   const pause = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    userPausedRef.current = true;
     audio.pause();
     setPlaying(false);
   }, []);
@@ -192,12 +233,20 @@ export function usePlayer(onEndedCallback?: () => void) {
     };
     const onPlay = () => {
       setPlaying(true);
-      // 播放成功（含重连成功）：复位网络自愈状态
+      // 播放成功（含重连/打断恢复成功）：复位暂停标记与网络自愈状态
+      userPausedRef.current = false;
+      stopResumeRetry();
       retryCountRef.current = 0;
       setRetryCount(0);
       setNetState('ok');
     };
-    const onPause = () => setPlaying(false);
+    const onPause = () => {
+      setPlaying(false);
+      // 非用户暂停、非自然播完 → 外部打断（来电/其他应用抢音频焦点），启动自动恢复
+      if (!userPausedRef.current && !audio.ended && currentEpisodeRef.current) {
+        startResumeRetry();
+      }
+    };
     // 断流自愈：audio error 态不会自行恢复（WiFi 切 4G、电梯断网等），
     // 记录进度后按指数退避自动重连；重连成功由 onPlay 复位状态
     const onError = () => {
@@ -221,6 +270,12 @@ export function usePlayer(onEndedCallback?: () => void) {
       }
     };
     window.addEventListener('online', onOnline);
+    // 回到前台/窗口获焦：打断若未恢复则立即尝试（后台轮询有 60s 上限）
+    const onVisible = () => {
+      if (!document.hidden && interruptedRef.current && !userPausedRef.current) tryResume();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
     return () => {
       audio.removeEventListener('timeupdate', onTime);
       audio.removeEventListener('loadedmetadata', onDur);
@@ -230,26 +285,51 @@ export function usePlayer(onEndedCallback?: () => void) {
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('error', onError);
       window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
     };
     // audio 元素在 App 挂载后即存在，依赖 currentEpisode/playId 以在就绪后注册监听
   }, [currentEpisode, playId]);
 
-  // 每 5s 保存进度（用 ref 读取最新时间，避免因 currentTime 频繁变化导致 interval 重建）
+  // 每 5s 保存进度 + 播放看门狗（用 ref 读取最新时间，避免因 currentTime 频繁变化导致 interval 重建）
   const currentTimeRef = useRef(0);
   const durationRef = useRef(0);
   currentTimeRef.current = currentTime;
   durationRef.current = duration;
+  // 看门狗状态：上次检查时的进度与停滞计数
+  const stallRef = useRef({ time: 0, count: 0 });
   useEffect(() => {
     if (!playing || !currentEpisode) return;
+    stallRef.current = { time: currentTimeRef.current, count: 0 };
     const id = window.setInterval(() => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      // 状态脱钩：界面在播但 audio 实际已暂停（非自然结束）→ 直接续播
+      if (audio.paused && !audio.ended) { audio.play().catch(() => {}); return; }
       const ct = currentTimeRef.current;
+      // 播放看门狗：playing 态但进度连续 ~10s 停滞（移动端偶发"假播放"：
+      // play() 成功但实际卡住且不触发 error 事件）→ 复用网络自愈重载恢复。
+      // 网络自愈进行中（retryCount>0）时跳过，避免打断退避节奏。
+      if (Math.abs(ct - stallRef.current.time) < 0.3) {
+        if (retryCountRef.current === 0) {
+          stallRef.current.count += 1;
+          if (stallRef.current.count >= 2) {
+            stallRef.current.count = 0;
+            attemptRecovery();
+          }
+        }
+      } else {
+        stallRef.current.count = 0;
+      }
+      stallRef.current.time = ct;
+      // 保存进度
       const du = durationRef.current;
       if (ct > 0 && du > 0) {
         saveProgress(currentEpisode.id, ct, du).catch(() => {});
       }
     }, 5000);
     return () => clearInterval(id);
-  }, [playing, currentEpisode]);
+  }, [playing, currentEpisode, attemptRecovery]);
 
   // 暂停时也保存
   const saveNow = useCallback(() => {
@@ -296,8 +376,8 @@ export function usePlayer(onEndedCallback?: () => void) {
     setSleepAfterEpisode(on);
   }, [clearSleepTimer]);
 
-  // 卸载时清理挂起的重连定时器
-  useEffect(() => () => clearRetryTimer(), [clearRetryTimer]);
+  // 卸载时清理挂起的重连/恢复定时器
+  useEffect(() => () => { clearRetryTimer(); stopResumeRetry(); }, [clearRetryTimer, stopResumeRetry]);
 
   return { audioRef, currentEpisode, playing, currentTime, duration, rate,
     play, togglePlay, pause, seek, setPlaybackRate, saveNow,

@@ -35,7 +35,9 @@ export default function Library({ onOpen, onResume }: Props) {
     const total = s?.total || book.episodeCount || 0;
     const doneCount = s?.done || 0;
     const startedCount = s?.started || 0;
-    return { pct: total > 0 ? Math.round((doneCount / total) * 100) : 0, doneCount, startedCount, total };
+    // 当前听到第几集（最近实际收听的分集序号，1 起）；无收听记录为 0
+    const currentEp = s?.lastEpisodeIndex !== undefined && s.lastEpisodeIndex >= 0 ? s.lastEpisodeIndex + 1 : 0;
+    return { pct: total > 0 ? Math.round((doneCount / total) * 100) : 0, doneCount, startedCount, total, currentEp };
   };
 
   const filteredBooks = useMemo(() => books.filter(b => {
@@ -156,7 +158,7 @@ export default function Library({ onOpen, onResume }: Props) {
           </h3>
           <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1 snap-x scrollbar-thin">
             {continueBooks.map(b => {
-              const { pct, doneCount, total } = bookProgress(b);
+              const { pct, currentEp, total } = bookProgress(b);
               return (
                 <div key={b.id} onClick={() => handleClick(b)}
                   className="snap-start shrink-0 w-32 sm:w-36 group cursor-pointer">
@@ -181,7 +183,7 @@ export default function Library({ onOpen, onResume }: Props) {
                     <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1.5">
                       <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full" style={{ width: `${pct}%` }} />
                     </div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-medium">{doneCount}/{total} 集</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-medium">听到第 {currentEp} 集 / 共 {total} 集</div>
                   </div>
                 </div>
               );
@@ -201,7 +203,7 @@ export default function Library({ onOpen, onResume }: Props) {
       )}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
         {sortedBooks.map(b => {
-          const { pct, doneCount, startedCount, total } = bookProgress(b);
+          const { pct, doneCount, startedCount, total, currentEp } = bookProgress(b);
           const hasProgress = startedCount > 0;
           const inProgress = hasProgress && doneCount < total;
           const opening = openingId === b.id;
@@ -234,7 +236,7 @@ export default function Library({ onOpen, onResume }: Props) {
                       <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex justify-between font-medium">
-                      <span>已听完 {doneCount}/{total} 集</span>
+                      <span>{currentEp > 0 ? `听到第 ${currentEp} 集` : `已听完 ${doneCount}/${total} 集`}</span>
                       <span>{pct}%</span>
                     </div>
                   </div>

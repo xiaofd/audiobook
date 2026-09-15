@@ -83,6 +83,7 @@ export interface BookSummary {
   done: number;
   started: number;
   lastEpisodeId?: string;
+  lastEpisodeIndex?: number; // 最近收听分集序号（0 起，按目录顺序）
   lastPosition: number;
   lastUpdated?: string; // 最近收听时间（RFC3339），用于继续收听/排序
 }

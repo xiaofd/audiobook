@@ -251,8 +251,8 @@ export default function App() {
 
   return (
     <div className="h-dvh bg-slate-50 dark:bg-[#0b0f17] text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
-      {/* 常驻 audio 元素：不随视图切换卸载，保证后台持续播放 */}
-      <audio ref={player.audioRef} />
+      {/* 常驻 audio 元素：不随视图切换卸载，保证后台持续播放；preload=auto 提前缓冲缓解弱网中断 */}
+      <audio ref={player.audioRef} preload="auto" />
 
       <nav className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white/80 dark:bg-[#0b0f17]/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 z-20">
         <div className="flex items-center gap-2 sm:gap-4">

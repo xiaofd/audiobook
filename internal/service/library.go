@@ -294,12 +294,13 @@ func formatScanSummary(books, episodes int) string {
 
 // BookProgressSummary 书库页聚合进度（一次查询返回全部书籍进度，避免前端 N+1 请求）。
 type BookProgressSummary struct {
-	BookID        string  `json:"bookId"`
-	Total         int     `json:"total"`         // 总分集数
-	Done          int     `json:"done"`          // 已听完分集数
-	Started       int     `json:"started"`       // 已开始收听分集数
-	LastEpisodeID string  `json:"lastEpisodeId"` // 最近收听的分集（断点续播）
-	LastPosition  float64 `json:"lastPosition"`  // 最近收听位置（秒）
+	BookID     string  `json:"bookId"`
+	Total      int     `json:"total"`         // 总分集数
+	Done       int     `json:"done"`          // 已听完分集数
+	Started    int     `json:"started"`       // 已开始收听分集数
+	LastEpisodeID string  `json:"lastEpisodeId"`  // 最近收听的分集（断点续播）
+	LastEpisodeIndex int  `json:"lastEpisodeIndex"` // 最近收听分集的序号（0 起，按目录顺序）
+	LastPosition  float64 `json:"lastPosition"` // 最近收听位置（秒）
 	// LastUpdated 最近收听时间（RFC3339），用于书库"继续收听/最近收听排序"
 	LastUpdated string `json:"lastUpdated,omitempty"`
 }
@@ -352,18 +353,23 @@ func GetLibrarySummary(userID string) map[string]BookProgressSummary {
 		rows.Close()
 	}
 
-	// 4) 每本书最近一次收听的分集与位置（按 updated_at 倒序，取每本书首条）
-	if rows, err := db.Query(`SELECT e.book_id, p.episode_id, p.position, p.updated_at FROM progress p JOIN episodes e ON p.episode_id=e.id
+	// 4) 每本书最近一次收听的分集与位置（按 updated_at 倒序，取每本书首条）。
+	//    附带分集序号（同书内 ord 更小的数量），供前端直接显示"听到第 N 集"。
+	if rows, err := db.Query(`SELECT e.book_id, p.episode_id, p.position, p.updated_at,
+		(SELECT COUNT(*) FROM episodes e2 WHERE e2.book_id = e.book_id AND e2.ord < e.ord) AS ep_idx
+		FROM progress p JOIN episodes e ON p.episode_id = e.id
 		WHERE p.user_id=? ORDER BY p.updated_at DESC`, userID); err == nil {
 		seen := map[string]bool{}
 		for rows.Next() {
 			var bookID, epID, ua string
 			var pos float64
-			if rows.Scan(&bookID, &epID, &pos, &ua) == nil && !seen[bookID] {
+			var idx int
+			if rows.Scan(&bookID, &epID, &pos, &ua, &idx) == nil && !seen[bookID] {
 				seen[bookID] = true
 				s := out[bookID]
 				s.BookID = bookID
 				s.LastEpisodeID = epID
+				s.LastEpisodeIndex = idx
 				s.LastPosition = pos
 				s.LastUpdated = ua
 				out[bookID] = s
