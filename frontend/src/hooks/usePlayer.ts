@@ -77,43 +77,56 @@ export function usePlayer(onEndedCallback?: () => void) {
     reloadAtLastPos();
   }, [clearRetryTimer, reloadAtLastPos]);
 
-  // --- 外部打断自动恢复（来电、其他应用抢占音频焦点）---
-  // 被打断时 audio 触发 pause 事件但并非用户操作；打断结束后无任何事件通知，
-  // 只能轮询尝试续播。用户主动暂停（userPaused）绝不自动恢复。
+  // --- 外部打断自动恢复（来电、系统提示音等瞬时打断）---
+  // 被打断时 audio 触发 pause 但并非用户操作；打断结束无事件通知，只能轮询续播。
+  // Web 无法区分"瞬时打断"与"用户主动转向其他音频"，用可见性/焦点做代理信号，
+  // 宁可少恢复也不与其他应用叠加出声：
+  //  - 仅当打断发生时页面可见且窗口有焦点，才进入恢复轮询；
+  //  - 轮询期间页面切后台或失去焦点 → 立即放弃（用户已在用别的应用）；
+  //  - 恢复成功后 10s 内再次被打断 → 指数退避（对方仍占用音频焦点），5 级后放弃。
   const userPausedRef = useRef(false);   // 用户主动暂停标记
-  const interruptedRef = useRef(false);  // 被外部打断，等待恢复
   const resumeTimerRef = useRef<number | null>(null);
-  const resumeAttemptsRef = useRef(0);
+  const resumeBackoffRef = useRef(0);    // 恢复退避等级
+  const lastResumeAtRef = useRef(0);     // 上次恢复成功时间
 
   const stopResumeRetry = useCallback(() => {
     if (resumeTimerRef.current !== null) {
-      clearInterval(resumeTimerRef.current);
+      clearTimeout(resumeTimerRef.current);
       resumeTimerRef.current = null;
     }
-    interruptedRef.current = false;
-    resumeAttemptsRef.current = 0;
   }, []);
 
-  const tryResume = useCallback(() => {
+  // 尝试恢复一次；返回 false 表示应放弃（用户已离开本应用/已主动暂停）
+  const tryResume = useCallback((): boolean => {
     const audio = audioRef.current;
-    if (!audio || !interruptedRef.current || userPausedRef.current) return;
-    // 焦点仍被占用（通话中/其他应用在播）时 play() 会 reject，静默等待下次重试
-    audio.play().catch(() => {});
+    if (!audio || userPausedRef.current) return false;
+    if (document.hidden || !document.hasFocus()) return false;
+    audio.play().then(() => { lastResumeAtRef.current = Date.now(); }).catch(() => {});
+    return true; // 无论成败继续下一轮（成功后 onPlay 会 stopResumeRetry）
   }, []);
 
-  const startResumeRetry = useCallback(() => {
-    if (resumeTimerRef.current !== null) return; // 已在重试中
-    interruptedRef.current = true;
-    resumeAttemptsRef.current = 0;
-    resumeTimerRef.current = window.setInterval(() => {
-      if (!interruptedRef.current || userPausedRef.current) { stopResumeRetry(); return; }
-      resumeAttemptsRef.current += 1;
-      // 页面在后台时最多重试 ~60s：避免用户主动切去别的音乐应用后持续抢焦点；
-      // 页面可见（用户正看着本应用）则持续重试直至恢复
-      if (document.hidden && resumeAttemptsRef.current > 20) { stopResumeRetry(); return; }
-      tryResume();
-    }, 3000);
-  }, [stopResumeRetry, tryResume]);
+  const scheduleResumeRetry = useCallback(() => {
+    if (resumeTimerRef.current !== null) return; // 已在等待
+    const wait = 3000 * Math.pow(2, resumeBackoffRef.current); // 3s/6s/12s/24s/48s
+    resumeTimerRef.current = window.setTimeout(() => {
+      resumeTimerRef.current = null;
+      if (tryResume()) scheduleResumeRetry();
+    }, wait);
+  }, [tryResume]);
+
+  // 打断发生（onPause 检测到非用户暂停）时调用
+  const onInterrupted = useCallback(() => {
+    // 页面在后台/无焦点时被打断：用户已主动切到其他应用，不抢音频焦点
+    if (document.hidden || !document.hasFocus()) return;
+    // 刚恢复成功 10s 内又被打断：对方仍在占用焦点，退避加级
+    if (lastResumeAtRef.current && Date.now() - lastResumeAtRef.current < 10000) {
+      resumeBackoffRef.current += 1;
+      if (resumeBackoffRef.current >= 5) return; // 放弃，等用户手动播放
+    } else {
+      resumeBackoffRef.current = 0;
+    }
+    scheduleResumeRetry();
+  }, [scheduleResumeRetry]);
 
   const play = useCallback((ep: Episode, startPos = 0) => {
     startPosRef.current = startPos;
@@ -242,9 +255,10 @@ export function usePlayer(onEndedCallback?: () => void) {
     };
     const onPause = () => {
       setPlaying(false);
-      // 非用户暂停、非自然播完 → 外部打断（来电/其他应用抢音频焦点），启动自动恢复
+      // 非用户暂停、非自然播完 → 外部打断（来电/提示音抢音频焦点），尝试自动恢复。
+      // onInterrupted 内部判定：打断时页面在后台/无焦点则直接放弃（用户已转向其他应用）
       if (!userPausedRef.current && !audio.ended && currentEpisodeRef.current) {
-        startResumeRetry();
+        onInterrupted();
       }
     };
     // 断流自愈：audio error 态不会自行恢复（WiFi 切 4G、电梯断网等），
@@ -270,12 +284,12 @@ export function usePlayer(onEndedCallback?: () => void) {
       }
     };
     window.addEventListener('online', onOnline);
-    // 回到前台/窗口获焦：打断若未恢复则立即尝试（后台轮询有 60s 上限）
-    const onVisible = () => {
-      if (!document.hidden && interruptedRef.current && !userPausedRef.current) tryResume();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onVisible);
+    // 页面进入后台或窗口失焦：立即放弃打断恢复（用户已转向其他应用/窗口，避免音频叠加）。
+    // 回到前台不自动恢复——显示暂停态，由用户手动续播。
+    const onAway = () => stopResumeRetry();
+    const onVisibility = () => { if (document.hidden) onAway(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onAway);
     return () => {
       audio.removeEventListener('timeupdate', onTime);
       audio.removeEventListener('loadedmetadata', onDur);
@@ -285,11 +299,11 @@ export function usePlayer(onEndedCallback?: () => void) {
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('error', onError);
       window.removeEventListener('online', onOnline);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onAway);
     };
     // audio 元素在 App 挂载后即存在，依赖 currentEpisode/playId 以在就绪后注册监听
-  }, [currentEpisode, playId]);
+  }, [currentEpisode, playId, attemptRecovery, onInterrupted, stopResumeRetry]);
 
   // 每 5s 保存进度 + 播放看门狗（用 ref 读取最新时间，避免因 currentTime 频繁变化导致 interval 重建）
   const currentTimeRef = useRef(0);
