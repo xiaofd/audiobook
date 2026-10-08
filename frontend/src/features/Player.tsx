@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Episode, coverUrl, getProgress } from '../services/api';
-import { PlayIcon, PauseIcon, PrevIcon, NextIcon, BookCoverFallback, TimerIcon, RewindIcon, ForwardIcon, VolumeIcon, VolumeXIcon, QueueIcon, XIcon, BarsIcon } from '../components/icons';
+import { PlayIcon, PauseIcon, PrevIcon, NextIcon, BookCoverFallback, TimerIcon, RewindIcon, ForwardIcon, VolumeIcon, VolumeXIcon, QueueIcon, XIcon, BarsIcon, ChevronDownIcon } from '../components/icons';
 
 const QUEUE_PAGE = 100; // 队列抽屉分页（长书）
 
