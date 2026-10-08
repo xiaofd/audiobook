@@ -13,7 +13,9 @@ export function useMediaSession(
   position: number,
   duration: number,
   bookId?: string,
-  skipSec = 15
+  skipSec = 15,
+  playbackRate = 1,
+  cover?: string
 ) {
   // 用 ref 读取最新的回调与位置，避免主 effect 依赖 position/duration，
   // 否则 timeupdate 每 ~250ms 触发一次 MediaMetadata/handler 全量重建。
@@ -35,7 +37,7 @@ export function useMediaSession(
       return;
     }
 
-    const artwork = bookId
+    const artwork = bookId && cover
       ? [
           { src: coverUrl(bookId), sizes: '96x96', type: 'image/jpeg' },
           { src: coverUrl(bookId), sizes: '256x256', type: 'image/jpeg' },
@@ -81,21 +83,21 @@ export function useMediaSession(
       } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [episode, bookTitle, bookId]);
+  }, [episode, bookTitle, bookId, cover]);
 
-  // 播放位置状态：随 position/duration 更新
+  // 播放位置状态：随 position/duration/playbackRate 更新
   useEffect(() => {
     if (!episode) return;
     if ('setPositionState' in navigator.mediaSession) {
       try {
         navigator.mediaSession.setPositionState({
           duration: Math.max(0, duration || 0),
-          playbackRate: 1,
+          playbackRate: Math.max(0.1, playbackRate || 1),
           position: Math.max(0, Math.min(position || 0, duration || 0)),
         } as MediaPositionState);
       } catch {}
     }
-  }, [position, duration, episode]);
+  }, [position, duration, episode, playbackRate]);
 
   // 播放/暂停状态
   useEffect(() => {

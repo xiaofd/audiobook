@@ -265,6 +265,14 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, _ := IssueToken(u.ID, u.Role, 7*24*time.Hour)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   7 * 24 * 3600,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{"token": token, "user": u})
 }
 
@@ -291,6 +299,14 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	clearLoginFails(rateKey)
 	token, _ := IssueToken(u.ID, u.Role, 7*24*time.Hour)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		MaxAge:   7 * 24 * 3600,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{"token": token, "user": u})
 }
 

@@ -39,9 +39,9 @@ func ServeStream(w http.ResponseWriter, r *http.Request, episode *Episode) {
 	if mode == StreamRedirect || mode == StreamAuto {
 		link, err := drv.Link(r.Context(), dobj)
 		if err == nil && link != nil && link.URL != "" {
-			// 直链含临时下载令牌，日志不落盘 URL（脱敏）
+			// 直链含临时下载令牌，日志不落盘 URL（脱敏），且防止 CDN 误缓存临时直链
 			log.Printf("[Stream] 302 直链: %s", episode.Title)
-			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Cache-Control", "no-cache, no-store, private")
 			http.Redirect(w, r, link.URL, http.StatusFound)
 			return
 		}

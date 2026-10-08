@@ -216,7 +216,7 @@ export default function App() {
     player.currentEpisode, selectedBook?.title || '', player.playing,
     player.togglePlay, player.pause, handlePrev, handleNext,
     (t) => player.seek(t), player.currentTime, player.duration,
-    selectedBook?.id, skipSec
+    selectedBook?.id, skipSec, player.rate, selectedBook?.cover
   );
 
   // 鉴权校验中：显示启动画面而非登录页（避免已登录用户看到登录页闪烁）
@@ -254,7 +254,7 @@ export default function App() {
       {/* 常驻 audio 元素：不随视图切换卸载，保证后台持续播放；preload=auto 提前缓冲缓解弱网中断 */}
       <audio ref={player.audioRef} preload="auto" />
 
-      <nav className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white/80 dark:bg-[#0b0f17]/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 z-20">
+      <nav className="flex items-center justify-between px-4 sm:px-6 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] bg-white/80 dark:bg-[#0b0f17]/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 z-20">
         <div className="flex items-center gap-2 sm:gap-4">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-500/20 text-white">
             <HeadphonesIcon className="w-5 h-5" />
@@ -300,7 +300,7 @@ export default function App() {
       <div className="flex-1 overflow-y-auto min-h-0">
         {view === 'library' && <Library onOpen={handleOpen} onResume={handleResume} />}
         {view === 'book' && selectedBook && <BookDetail book={selectedBook} episodes={episodes} onPlay={handlePlay} onBack={goBack} onBookUpdated={(b) => setSelectedBook(b)} onEpisodesUpdated={setEpisodes} canEdit={isAdmin} />}
-        {view === 'player' && <PlayerView player={player} episodes={episodes} epIndex={epIndex} bookTitle={selectedBook?.title || ''} onPlay={handlePlay} onPrev={handlePrev} onNext={handleNext} onBack={goBack} coverBookId={selectedBook?.id || ''} onRateChange={handleRateChange} autoNext={autoNext} onAutoNextChange={handleAutoNextChange} skipSec={skipSec} />}
+        {view === 'player' && <PlayerView player={player} episodes={episodes} epIndex={epIndex} bookTitle={selectedBook?.title || ''} onPlay={handlePlay} onPrev={handlePrev} onNext={handleNext} onBack={goBack} coverBookId={selectedBook?.id || ''} onRateChange={handleRateChange} autoNext={autoNext} onAutoNextChange={handleAutoNextChange} skipSec={skipSec} cover={selectedBook?.cover} />}
         {view === 'admin' && isAdmin && (
           <Suspense fallback={<div className="text-center py-20 text-slate-500 dark:text-slate-400 text-sm">加载管理页...</div>}>
             <Admin />
@@ -314,6 +314,7 @@ export default function App() {
           player={player}
           bookTitle={selectedBook?.title || ''}
           coverBookId={selectedBook?.id || ''}
+          cover={selectedBook?.cover}
           onOpenPlayer={() => navigate('player')}
           onPrev={handlePrev}
           onNext={handleNext}

@@ -43,7 +43,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
           <div className="space-y-3.5">
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">用户名</label>
-              <input className={inputCls} placeholder="请输入用户名" value={username} onChange={e => setUsername(e.target.value)} autoFocus />
+              <input type="text" className={inputCls} placeholder="请输入用户名" value={username} onChange={e => setUsername(e.target.value)} autoFocus />
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">密码</label>

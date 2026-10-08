@@ -17,6 +17,10 @@ function authHeaders(): Record<string, string> {
 async function req<T = any>(method: string, path: string, body?: any): Promise<T> {
   const res = await fetch(path, { method, headers: authHeaders(), body: body ? JSON.stringify(body) : undefined });
   if (res.status === 401) {
+    if (path === '/api/auth/login' || path === '/api/auth/register') {
+      const e = await res.json().catch(() => ({ error: '用户名或密码错误' }));
+      throw new Error(e.error || '用户名或密码错误');
+    }
     localStorage.removeItem('token');
     onUnauthorized?.();
     throw new Error('登录已过期，请重新登录');

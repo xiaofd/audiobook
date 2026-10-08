@@ -12,9 +12,10 @@ interface PlayerHook {
 }
 
 // MiniPlayer 全局迷你播放条：浏览书库/详情/管理页时固定在底部，点击进入完整播放页。
-export default function MiniPlayer({ player, bookTitle, coverBookId, onOpenPlayer, onPrev, onNext }: {
+export default function MiniPlayer({ player, bookTitle, coverBookId, onOpenPlayer, onPrev, onNext, cover }: {
   player: PlayerHook; bookTitle: string; coverBookId: string;
   onOpenPlayer: () => void; onPrev: () => void; onNext: () => void;
+  cover?: string;
 }) {
   const { currentEpisode, playing, currentTime, duration, netState, togglePlay } = player;
   const [coverErr, setCoverErr] = useState(false);
@@ -24,10 +25,10 @@ export default function MiniPlayer({ player, bookTitle, coverBookId, onOpenPlaye
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="relative border-t border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-[#0b0f17]/95 backdrop-blur-xl px-3 sm:px-5 py-2.5 flex items-center gap-3 z-20">
+    <div className="relative border-t border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-[#0b0f17]/95 backdrop-blur-xl px-3 sm:px-5 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] flex items-center gap-3 z-20">
       {/* 点击主体进入播放页 */}
       <div onClick={onOpenPlayer} className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer group">
-        {coverErr ? (
+        {!cover || coverErr ? (
           <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-gray-800 to-indigo-900/50 flex items-center justify-center shrink-0">
             <BookCoverFallback className="w-5 h-5 text-gray-600" />
           </div>

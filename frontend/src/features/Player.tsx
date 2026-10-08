@@ -28,15 +28,31 @@ interface PlayerHook {
   retryNow: () => void;
 }
 
-export default function PlayerView({ player, episodes, epIndex, bookTitle, onPlay, onPrev, onNext, onBack, coverBookId, onRateChange, autoNext, onAutoNextChange, skipSec }: {
+export default function PlayerView({ player, episodes, epIndex, bookTitle, onPlay, onPrev, onNext, onBack, coverBookId, onRateChange, autoNext, onAutoNextChange, skipSec, cover }: {
   player: PlayerHook; episodes: Episode[]; epIndex: number; bookTitle: string;
   onPlay: (ep: Episode, idx: number, pos: number) => void; onPrev: () => void; onNext: () => void; onBack: () => void; coverBookId: string;
   onRateChange?: (r: number) => void;
   autoNext?: boolean; onAutoNextChange?: (v: boolean) => void;
   skipSec?: number;
+  cover?: string;
 }) {
   const { audioRef, currentEpisode, playing, currentTime, duration, rate, volume, muted, sleepEndsAt, sleepAfterEpisode, netState, retryCount, retryNow, togglePlay, seek, setPlaybackRate, setVolume, toggleMute, setSleepTimer, setSleepAfterEpisodeMode } = player;
   const skip = skipSec || 15;
+
+  const [showRateMenu, setShowRateMenu] = useState(false);
+  const rateMenuRef = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭倍速菜单
+  useEffect(() => {
+    if (!showRateMenu) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (rateMenuRef.current && !rateMenuRef.current.contains(e.target as Node)) {
+        setShowRateMenu(false);
+      }
+    };
+    window.addEventListener('mousedown', onClickOutside);
+    return () => window.removeEventListener('mousedown', onClickOutside);
+  }, [showRateMenu]);
 
   // 睡眠定时器倒计时显示
   const [now, setNow] = useState(Date.now());
@@ -100,10 +116,12 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
     // 外层容器与首页/目录页同宽（max-w-6xl）：返回栏、标题与其他页面左右对齐；
     // 播放控件在容器内居中收窄（max-w-xl），宽屏不空旷、手机不溢出
     <div className="relative mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 min-h-full flex flex-col">
-      {/* 氛围层：封面模糊放大作为全屏背景（fixed 不受内容列宽度限制，消除"细长框"割裂感） */}
-      <div aria-hidden className="fixed inset-0 overflow-hidden pointer-events-none">
-        <img src={coverUrl(coverBookId)} alt="" className="w-full h-full object-cover blur-3xl scale-125 opacity-15 dark:opacity-25" />
-      </div>
+      {/* 氛围层：封面模糊放大作为全屏背景（有封面时展示，fixed 不受内容列宽度限制，消除"细长框"割裂感） */}
+      {cover && (
+        <div aria-hidden className="fixed inset-0 overflow-hidden pointer-events-none">
+          <img src={coverUrl(coverBookId)} alt="" className="w-full h-full object-cover blur-3xl scale-125 opacity-15 dark:opacity-25" />
+        </div>
+      )}
 
       {/* 控件列：居中窄列（播放控件适合窄排布），背景由全屏氛围层承接 */}
       <div className="relative w-full max-w-xl mx-auto flex-1 flex flex-col items-center justify-center py-6 sm:py-8 text-slate-900 dark:text-slate-100">
@@ -117,7 +135,7 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
           </button>
         </div>
 
-        <PlayerCover bookId={coverBookId} title={bookTitle} playing={playing} />
+        <PlayerCover bookId={coverBookId} title={bookTitle} playing={playing} cover={cover} />
 
         <div className="text-center mt-8 w-full">
           <div className="text-xl font-bold truncate text-slate-900 dark:text-slate-100">{currentEpisode?.title || '未选择'}</div>
@@ -166,8 +184,8 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
           </button>
         </div>
 
-        {/* 音量控制 */}
-        <div className="flex items-center gap-2.5 mt-6 w-full max-w-[240px]">
+        {/* 音量控制：手机端隐藏避免误触与占高，桌面端显示 */}
+        <div className="hidden sm:flex items-center gap-2.5 mt-6 w-full max-w-[240px]">
           <button onClick={toggleMute} title={muted ? '取消静音' : '静音'}
             className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition shrink-0">
             {muted || volume === 0 ? <VolumeXIcon className="w-5 h-5" /> : <VolumeIcon className="w-5 h-5" />}
@@ -187,55 +205,75 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
           </div>
         )}
 
-        <div className="flex flex-wrap justify-center gap-2 mt-6 max-w-xs">
-          {[0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5, 1.6, 1.75, 2.0, 2.5, 3.0].map(r => (
-            <button key={r} onClick={() => handleSetRate(r)}
-              className={`px-3 py-1 text-xs font-semibold rounded-full transition ${rate === r ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>{r}x</button>
-          ))}
-        </div>
-
-        {/* 连播开关 + 睡眠定时器 */}
+        {/* 播放控制工具栏：倍速弹层选择器 + 连播开关 + 睡眠定时器 */}
         <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+          {/* 倍速切换（弹层/下拉，告别 13 颗药丸地毯堆叠） */}
+          <div className="relative" ref={rateMenuRef}>
+            <button
+              onClick={() => setShowRateMenu(v => !v)}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-full bg-slate-200/70 dark:bg-slate-800 hover:bg-slate-300/70 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition">
+              <span>{rate}x 倍速</span>
+              <ChevronDownIcon className="w-3.5 h-3.5 opacity-70" />
+            </button>
+            {showRateMenu && (
+              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2 shadow-2xl z-30 grid grid-cols-4 gap-1.5 w-56 animate-[toast-in_.15s_ease-out]">
+                {[0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5, 1.6, 1.75, 2.0, 3.0].map(r => (
+                  <button
+                    key={r}
+                    onClick={() => { handleSetRate(r); setShowRateMenu(false); }}
+                    className={`px-2 py-1.5 text-xs font-semibold rounded-lg transition ${
+                      rate === r
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}>
+                    {r}x
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button onClick={() => onAutoNextChange?.(!autoNext)} title="播完当前集后自动播放下一集"
-            className={`px-3 py-1 text-xs font-semibold rounded-full transition ${autoNext ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition ${autoNext ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
             连播{autoNext ? '开' : '关'}
           </button>
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-            <TimerIcon className="w-3.5 h-3.5" /> 睡眠定时
+
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1 ml-1">
+            <TimerIcon className="w-3.5 h-3.5" /> 定时
           </span>
-          {[15, 30, 60, 90].map(m => (
+          {[15, 30, 60].map(m => (
             <button key={m} onClick={() => setSleepTimer(m)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-full transition ${sleepEndsAt ? 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'}`}>
-              {m}分钟
+              className={`px-2.5 py-1.5 text-xs font-medium rounded-full transition ${sleepEndsAt ? 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'}`}>
+              {m}分
             </button>
           ))}
           <button onClick={() => setSleepAfterEpisodeMode(!sleepAfterEpisode)} title="当前分集播放完毕后停止，不连播下一集"
-            className={`px-2.5 py-1 text-xs font-medium rounded-full transition ${sleepAfterEpisode ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'}`}>
-            本集播完
+            className={`px-2.5 py-1.5 text-xs font-medium rounded-full transition ${sleepAfterEpisode ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'}`}>
+            播完止
           </button>
           {(sleepEndsAt || sleepAfterEpisode) && (
-            <>
+            <div className="flex items-center gap-1.5 w-full justify-center mt-1">
               {sleepEndsAt && (
                 <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 tabular-nums">{Math.floor(sleepLeftSec / 60)}:{(sleepLeftSec % 60).toString().padStart(2, '0')} 后暂停</span>
               )}
               {sleepAfterEpisode && <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">本集播完即停</span>}
               <button onClick={() => { setSleepTimer(null); setSleepAfterEpisodeMode(false); }}
-                className="px-2.5 py-1 text-xs font-medium rounded-full bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition">取消</button>
-            </>
+                className="px-2 py-0.5 text-[11px] font-medium rounded-full bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition">取消</button>
+            </div>
           )}
         </div>
       </div>
 
-      {/* 章节队列抽屉：切集无需返回详情页。
-          定位用 flex 居中而非 translate：入场动画的 transform 会覆盖 Tailwind 的
-          translate 工具类，导致动画期间面板偏在右下、结束后才跳回中央 */}
+      {/* 章节队列抽屉：带 iOS 风格拖拽指示条与圆润顶部 */}
       {showQueue && (
         <div className="fixed inset-0 z-50" onClick={() => setShowQueue(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div className="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center">
-            <div className="max-h-[70vh] w-full sm:max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col animate-[toast-in_.25s_ease-out]"
+            <div className="max-h-[75vh] sm:max-h-[70vh] w-full sm:max-w-md bg-white dark:bg-slate-900 rounded-t-[28px] sm:rounded-3xl shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom)] animate-[toast-in_.25s_ease-out]"
               onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              {/* 移动端顶部拉手横条 */}
+              <div className="w-10 h-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mt-2.5 sm:hidden" />
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 shrink-0">
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">章节列表 · 共 {episodes.length} 集</h3>
               <button onClick={() => setShowQueue(false)} className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
                 <XIcon className="w-4 h-4" />
@@ -285,8 +323,8 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
   );
 }
 
-// SeekBar 自绘进度条：缓冲区（浅色）+ 已播放（渐变）+ 悬停时间气泡 + 拖拽把手。
-// 替代原生 <input type=range>（各浏览器样式不一、无悬停预览、把手过小难以拖拽）。
+// SeekBar 自绘进度条：缓冲区（浅色）+ 已播放（渐变）+ 悬停/拖拽时间气泡 + 拖拽把手。
+// 优化：拖拽期间仅更新本地预览 UI，松手（PointerUp）时才提交 seek，避免高频发请求引起卡顿或解码异常。
 function SeekBar({ audioRef, currentTime, duration, onSeek, fmt }: {
   audioRef: React.RefObject<HTMLAudioElement | null>;
   currentTime: number; duration: number;
@@ -295,6 +333,8 @@ function SeekBar({ audioRef, currentTime, duration, onSeek, fmt }: {
   const barRef = useRef<HTMLDivElement>(null);
   const [hoverX, setHoverX] = useState<number | null>(null); // 悬停位置比例 0-1
   const [dragging, setDragging] = useState(false);
+  const [dragRatio, setDragRatio] = useState<number | null>(null); // 拖拽中临时比例 0-1
+  const dragRatioRef = useRef<number | null>(null);
   const [buffered, setBuffered] = useState(0); // 缓冲比例 0-1
 
   // 从 audio 元素读取缓冲区
@@ -316,24 +356,52 @@ function SeekBar({ audioRef, currentTime, duration, onSeek, fmt }: {
 
   const ratioAt = useCallback((clientX: number) => {
     const el = barRef.current;
-    if (!el || duration <= 0) return 0;
+    if (!el || !duration || duration <= 0) return 0;
     const rect = el.getBoundingClientRect();
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
   }, [duration]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (duration <= 0) return;
+    if (!duration || duration <= 0) return;
+    const r = ratioAt(e.clientX);
     setDragging(true);
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    onSeek(ratioAt(e.clientX) * duration);
+    setDragRatio(r);
+    dragRatioRef.current = r;
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
-  const handlePointerMove = (e: React.PointerEvent) => {
-    setHoverX(ratioAt(e.clientX));
-    if (dragging) onSeek(ratioAt(e.clientX) * duration);
-  };
-  const handlePointerUp = () => setDragging(false);
 
-  const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const r = ratioAt(e.clientX);
+    setHoverX(r);
+    if (dragging) {
+      setDragRatio(r);
+      dragRatioRef.current = r;
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (dragging) {
+      setDragging(false);
+      const finalR = dragRatioRef.current ?? ratioAt(e.clientX);
+      if (duration > 0) {
+        onSeek(finalR * duration);
+      }
+      setDragRatio(null);
+      dragRatioRef.current = null;
+    }
+  };
+
+  const handlePointerCancel = () => {
+    if (dragging) {
+      setDragging(false);
+      setDragRatio(null);
+      dragRatioRef.current = null;
+    }
+  };
+
+  // 拖拽期间显示拖拽位置，松手后恢复真实播放进度
+  const displayTime = dragging && dragRatio !== null && duration > 0 ? dragRatio * duration : currentTime;
+  const pct = duration > 0 ? Math.max(0, Math.min(100, (displayTime / duration) * 100)) : 0;
   const hoverPct = hoverX != null ? hoverX * 100 : null;
 
   return (
@@ -344,36 +412,37 @@ function SeekBar({ audioRef, currentTime, duration, onSeek, fmt }: {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onPointerLeave={() => setHoverX(null)}
       >
         {/* 轨道 */}
         <div className="absolute inset-x-0 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
           <div className="h-full bg-slate-300 dark:bg-slate-700 rounded-full" style={{ width: `${buffered * 100}%` }} />
         </div>
-        {/* 已播放 */}
+        {/* 已播放 / 拖拽预览 */}
         <div className="absolute h-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full pointer-events-none" style={{ width: `${pct}%` }} />
         {/* 拖拽把手 */}
         <div className={`absolute w-3.5 h-3.5 rounded-full bg-white dark:bg-white shadow-md ring-2 ring-indigo-500 pointer-events-none transition-transform ${dragging ? 'scale-125' : 'scale-0 group-hover:scale-100'}`}
           style={{ left: `calc(${pct}% - 7px)` }} />
-        {/* 悬停时间气泡 */}
-        {hoverPct != null && !dragging && (
-          <div className="absolute -top-7 px-1.5 py-0.5 rounded-md bg-slate-900 dark:bg-slate-700 text-white text-[11px] font-medium tabular-nums pointer-events-none shadow-lg"
-            style={{ left: `calc(${hoverPct}% - 18px)` }}>
-            {fmt((hoverX || 0) * duration)}
+        {/* 悬停/拖拽时间气泡 */}
+        {(dragging || hoverPct != null) && duration > 0 && (
+          <div className="absolute -top-7 px-1.5 py-0.5 rounded-md bg-slate-900 dark:bg-slate-700 text-white text-[11px] font-medium tabular-nums pointer-events-none shadow-lg -translate-x-1/2"
+            style={{ left: `${dragging ? pct : (hoverPct || 0)}%` }}>
+            {fmt(displayTime > 0 ? displayTime : (hoverX || 0) * duration)}
           </div>
         )}
       </div>
       <div className="flex justify-between w-full text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-medium tabular-nums">
-        <span>{fmt(currentTime)}</span>
+        <span>{fmt(displayTime)}</span>
         <span>{fmt(duration)}</span>
       </div>
     </div>
   );
 }
 
-function PlayerCover({ bookId, title, playing }: { bookId: string; title: string; playing: boolean }) {
+function PlayerCover({ bookId, title, playing, cover }: { bookId: string; title: string; playing: boolean; cover?: string }) {
   const [err, setErr] = useState(false);
-  if (err) return (
+  if (!cover || err) return (
     <div className={`w-44 h-44 sm:w-56 sm:h-56 md:w-64 md:h-64 rounded-3xl bg-gradient-to-br from-gray-800 via-gray-800 to-indigo-900/50 flex items-center justify-center shadow-2xl select-none transition-shadow duration-700 ${playing ? 'shadow-indigo-500/30' : ''}`}>
       <BookCoverFallback className="w-20 h-20 text-gray-600" />
     </div>

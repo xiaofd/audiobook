@@ -107,14 +107,14 @@ export default function BookDetail({ book, episodes, onPlay, onBack, onBookUpdat
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28">
+    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-[calc(7rem+env(safe-area-inset-bottom))]">
       <button onClick={onBack} className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 mb-6 transition flex items-center gap-1.5">
         ← 返回书库
       </button>
 
       <div className="flex flex-col sm:flex-row gap-6 mb-8 bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 p-5 rounded-2xl shadow-sm">
         <div className="relative group self-center sm:self-start shrink-0">
-          <BookCover key={coverVersion} bookId={book.id} title={book.title} className="w-32 h-44 sm:w-40 sm:h-52 md:w-48 md:h-64 rounded-xl shadow-md object-cover" />
+          <BookCover key={coverVersion} bookId={book.id} title={book.title} cover={book.cover} className="w-32 h-44 sm:w-40 sm:h-52 md:w-48 md:h-64 rounded-xl shadow-md object-cover" />
           {canEdit && (
             <>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
@@ -207,20 +207,22 @@ export default function BookDetail({ book, episodes, onPlay, onBack, onBookUpdat
 
       {/* 分页控件：长书目录按页管理（50 集/页），支持跳页 */}
       {totalPages > 1 && (
-        <div className="flex flex-wrap items-center justify-center gap-1.5 mt-5 select-none">
-          <button onClick={() => goToPage(0)} disabled={page === 0} title="首页"
-            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 transition">«</button>
-          <button onClick={() => goToPage(page - 1)} disabled={page === 0}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 transition">上一页</button>
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium tabular-nums px-1">
-            第 {page + 1} / {totalPages} 页
-          </span>
-          <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages - 1}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 transition">下一页</button>
-          <button onClick={() => goToPage(totalPages - 1)} disabled={page >= totalPages - 1} title="末页"
-            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 transition">»</button>
+        <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-5 select-none">
+          <div className="flex items-center gap-1">
+            <button onClick={() => goToPage(0)} disabled={page === 0} title="首页"
+              className="px-2 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 transition">«</button>
+            <button onClick={() => goToPage(page - 1)} disabled={page === 0}
+              className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 transition">上一页</button>
+            <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold tabular-nums px-2">
+              {page + 1} / {totalPages}
+            </span>
+            <button onClick={() => goToPage(page + 1)} disabled={page >= totalPages - 1}
+              className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 transition">下一页</button>
+            <button onClick={() => goToPage(totalPages - 1)} disabled={page >= totalPages - 1} title="末页"
+              className="px-2 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-30 transition">»</button>
+          </div>
           {/* 跳页：输入页码回车直达（千集书快速定位） */}
-          <form className="flex items-center gap-1 ml-2" onSubmit={e => {
+          <form className="flex items-center gap-1" onSubmit={e => {
             e.preventDefault();
             const n = parseInt(jumpPage, 10);
             if (!isNaN(n)) goToPage(n - 1);
@@ -228,10 +230,10 @@ export default function BookDetail({ book, episodes, onPlay, onBack, onBookUpdat
             <input
               type="number" min={1} max={totalPages} value={jumpPage}
               onChange={e => setJumpPage(e.target.value)}
-              placeholder="页码"
-              className="w-14 px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-center text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 transition" />
+              placeholder="跳页"
+              className="w-12 sm:w-14 px-1.5 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-center text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 transition" />
             <button type="submit"
-              className="px-2.5 py-1 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition">跳转</button>
+              className="px-2 py-1 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition">Go</button>
           </form>
         </div>
       )}
@@ -265,10 +267,10 @@ export default function BookDetail({ book, episodes, onPlay, onBack, onBookUpdat
   );
 }
 
-function BookCover({ bookId, title, className }: { bookId: string; title: string; className?: string }) {
+function BookCover({ bookId, title, cover, className }: { bookId: string; title: string; cover?: string; className?: string }) {
   const [err, setErr] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  if (err) return <div className={`${className} bg-gradient-to-br from-gray-800 via-gray-800 to-indigo-900/40 flex items-center justify-center select-none`}><BookCoverFallback className="w-10 h-10 text-gray-600" /></div>;
+  if (!cover || err) return <div className={`${className} bg-gradient-to-br from-gray-800 via-gray-800 to-indigo-900/40 flex items-center justify-center select-none`}><BookCoverFallback className="w-10 h-10 text-gray-600" /></div>;
   return (
     <div className={`${className} relative overflow-hidden bg-slate-200 dark:bg-slate-800`}>
       {!loaded && <div className="absolute inset-0 animate-pulse" />}

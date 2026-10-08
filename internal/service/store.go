@@ -82,6 +82,19 @@ func migrate() {
 	if _, err := db.Exec(`ALTER TABLE progress ADD COLUMN is_finished INTEGER DEFAULT 0`); err != nil {
 		// 列已存在则忽略
 	}
+
+	// 性能索引：千集长书与多用户下的聚合查询、排序与进度检索提速（杜绝全表扫描）
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_episodes_book_ord ON episodes(book_id, ord)`,
+		`CREATE INDEX IF NOT EXISTS idx_progress_user_ep ON progress(user_id, episode_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_progress_user_updated ON progress(user_id, updated_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_books_storage ON books(storage_id)`,
+	}
+	for _, idx := range indexes {
+		if _, err := db.Exec(idx); err != nil {
+			log.Printf("[Store] 创建索引警告: %v", err)
+		}
+	}
 }
 
 // --- User Settings CRUD ---

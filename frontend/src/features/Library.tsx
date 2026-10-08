@@ -87,16 +87,18 @@ export default function Library({ onOpen, onResume }: Props) {
       .slice(0, 10);
   }, [books, summary]);
 
-  const handleClick = async (book: Book) => {
+  const handleClick = async (book: Book, directResume = false) => {
     if (openingId) return; // 防重复点击
     setOpeningId(book.id);
     try {
       const eps = await listEpisodes(book.id);
-      // 有收听记录则直接断点续播
-      const s = summary[book.id];
-      if (s?.lastEpisodeId) {
-        const idx = eps.findIndex(e => e.id === s.lastEpisodeId);
-        if (idx >= 0) { onResume(book, eps, idx, s.lastPosition || 0); return; }
+      // 仅当用户明确点击续播按钮时直接断点续播，否则进入书籍详情页查看目录
+      if (directResume) {
+        const s = summary[book.id];
+        if (s?.lastEpisodeId) {
+          const idx = eps.findIndex(e => e.id === s.lastEpisodeId);
+          if (idx >= 0) { onResume(book, eps, idx, s.lastPosition || 0); return; }
+        }
       }
       onOpen(book, eps);
     } catch (e: any) {
@@ -113,25 +115,27 @@ export default function Library({ onOpen, onResume }: Props) {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">我的书库</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">共收录 {books.length} 部有声书作品</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
           {/* 排序：最近收听 / 名称 / 完成度 */}
           <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl shrink-0">
             <button onClick={() => setSortBy('recent')} className={sortBtn('recent', '最近')}>最近</button>
             <button onClick={() => setSortBy('title')} className={sortBtn('title', '名称')}>名称</button>
             <button onClick={() => setSortBy('progress')} className={sortBtn('progress', '进度')}>进度</button>
           </div>
-          <input
-            type="text"
-            placeholder="搜索书名或作者..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full sm:w-64 px-3.5 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-xs transition"
-          />
+          <div className="flex-1 sm:w-64 min-w-[160px]">
+            <input
+              type="text"
+              placeholder="搜索书名或作者..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full px-3.5 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-xs transition"
+            />
+          </div>
         </div>
       </div>
 
@@ -160,14 +164,18 @@ export default function Library({ onOpen, onResume }: Props) {
             {continueBooks.map(b => {
               const { pct, currentEp, total } = bookProgress(b);
               return (
-                <div key={b.id} onClick={() => handleClick(b)}
-                  className="snap-start shrink-0 w-32 sm:w-36 group cursor-pointer">
+                <div key={b.id}
+                  className="snap-start shrink-0 w-32 sm:w-36 group cursor-pointer"
+                  onClick={() => handleClick(b, false)}>
                   <div className="relative">
-                    <BookCover bookId={b.id} title={b.title} />
+                    <BookCover bookId={b.id} title={b.title} cover={b.cover} />
                     <div className="absolute inset-0 rounded-none bg-black/0 group-hover:bg-black/30 flex items-center justify-center transition-colors">
-                      <span className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                      <button
+                        title="立即继续播放"
+                        onClick={(e) => { e.stopPropagation(); handleClick(b, true); }}
+                        className="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-500 hover:scale-110 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg cursor-pointer">
                         <PlayIcon className="w-4 h-4 ml-0.5" />
-                      </span>
+                      </button>
                     </div>
                     {openingId === b.id && (
                       <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
@@ -208,10 +216,19 @@ export default function Library({ onOpen, onResume }: Props) {
           const inProgress = hasProgress && doneCount < total;
           const opening = openingId === b.id;
           return (
-            <div key={b.id} onClick={() => handleClick(b)}
+            <div key={b.id} onClick={() => handleClick(b, false)}
               className={`group bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl overflow-hidden cursor-pointer hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 ${opening ? 'opacity-60 pointer-events-none' : ''}`}>
               <div className="relative">
-                <BookCover bookId={b.id} title={b.title} />
+                <BookCover bookId={b.id} title={b.title} cover={b.cover} />
+                {/* 悬停快捷续播圆钮 */}
+                {inProgress && (
+                  <button
+                    title="继续播放"
+                    onClick={(e) => { e.stopPropagation(); handleClick(b, true); }}
+                    className="absolute right-2.5 bottom-2.5 w-9 h-9 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110 z-10 cursor-pointer">
+                    <PlayIcon className="w-4 h-4 ml-0.5" />
+                  </button>
+                )}
                 {/* 点击加载分集时的转圈遮罩（慢网盘下提供反馈） */}
                 {opening && (
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
@@ -250,11 +267,11 @@ export default function Library({ onOpen, onResume }: Props) {
   );
 }
 
-// BookCover 封面加载完成后淡入（消除图片弹出生硬感），失败显示占位
-function BookCover({ bookId, title }: { bookId: string; title: string }) {
+// BookCover 封面加载完成后淡入（消除图片弹出生硬感），失败或无封面显示占位（避免 404 网络请求）
+function BookCover({ bookId, title, cover }: { bookId: string; title: string; cover?: string }) {
   const [err, setErr] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  if (err) return (
+  if (!cover || err) return (
     <div className="w-full aspect-[3/4] bg-gradient-to-br from-gray-800 via-gray-800 to-indigo-900/40 flex items-center justify-center select-none">
       <BookCoverFallback className="w-14 h-14 text-gray-600" />
     </div>
