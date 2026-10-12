@@ -264,12 +264,12 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	token, _ := IssueToken(u.ID, u.Role, 7*24*time.Hour)
+	token, _ := IssueToken(u.ID, u.Role, 90*24*time.Hour)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    token,
 		Path:     "/",
-		MaxAge:   7 * 24 * 3600,
+		MaxAge:   90 * 24 * 3600, // 90 天长效 Cookie
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -298,12 +298,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clearLoginFails(rateKey)
-	token, _ := IssueToken(u.ID, u.Role, 7*24*time.Hour)
+	token, _ := IssueToken(u.ID, u.Role, 90*24*time.Hour)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    token,
 		Path:     "/",
-		MaxAge:   7 * 24 * 3600,
+		MaxAge:   90 * 24 * 3600, // 90 天长效 Cookie
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})

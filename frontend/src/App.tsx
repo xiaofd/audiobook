@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
-import { me, logout as apiLogout, getUserSettings, saveUserSettings, getProgress, setOnUnauthorized, type Book, type Episode, type UserSettings } from './services/api';
+import { me, logout as apiLogout, getUserSettings, saveUserSettings, getProgress, setOnUnauthorized, streamUrl, type Book, type Episode, type UserSettings } from './services/api';
+import { saveLocalPlaybackState, getLocalPlaybackState, preloadNextEpisode } from './services/cache';
 import { usePlayer } from './hooks/usePlayer';
 import { useMediaSession } from './hooks/useMediaSession';
 import Login from './features/Login';
@@ -92,8 +93,16 @@ export default function App() {
   }, []);
 
   const handlePlay = useCallback((ep: Episode, idx: number, startPos = 0) => {
-    setEpIndex(idx); playerRef.current?.play(ep, startPos); navigate('player');
-  }, [navigate]);
+    setEpIndex(idx);
+    playerRef.current?.play(ep, startPos);
+    navigate('player');
+
+    // 1. 预加载下一集：利用浏览器 Cache / Prefetch 机制提前拉取下一集，实现秒级连播
+    if (idx + 1 < episodes.length) {
+      const nextEp = episodes[idx + 1];
+      preloadNextEpisode(streamUrl(nextEp.id));
+    }
+  }, [episodes, navigate]);
 
   // 连播回调：当前集播放结束时，如果开启连播且有下一集，自动切至下一集并播放
   const handleAutoNext = useCallback(() => {
@@ -129,14 +138,43 @@ export default function App() {
   // Token 过期全局处理：任意请求收到 401 → 清登录态回登录页
   useEffect(() => { setOnUnauthorized(handleLogout); }, [handleLogout]);
 
-  // 启动时校验登录态并加载偏好
+  // 启动时校验登录态并加载偏好，同时加载本机持久化续播状态
   useEffect(() => {
-    me().then(u => {
+    me().then(async u => {
       setUser(u);
       setAuthing(false);
       getUserSettings().then(applyUserSettings).catch(() => {});
+
+      // 本机离线/长时间未访问秒级续听：自动恢复上次未听完的书籍与章节状态
+      try {
+        const lastCached = await getLocalPlaybackState();
+        if (lastCached && lastCached.book && lastCached.episodes?.length > 0) {
+          setSelectedBook(lastCached.book);
+          setEpisodes(lastCached.episodes);
+          setEpIndex(lastCached.epIndex || 0);
+          // 静默准备上次播放分集与进度
+          const ep = lastCached.episodes[lastCached.epIndex || 0];
+          if (ep && playerRef.current) {
+            playerRef.current.play(ep, lastCached.position || 0);
+            playerRef.current.pause(); // 准备好但不自动打扰用户出声，用户点击即可无缝续听
+          }
+        }
+      } catch {}
     }).catch(() => { setAuthing(false); setView('login'); });
   }, [applyUserSettings]);
+
+  // 播放中持续同步到本地离线持久化存储（IndexedDB + localStorage）
+  useEffect(() => {
+    if (player.currentEpisode && selectedBook && episodes.length > 0) {
+      saveLocalPlaybackState({
+        book: selectedBook,
+        episodes,
+        epIndex,
+        position: player.currentTime || 0,
+        updatedAt: Date.now(),
+      });
+    }
+  }, [player.currentEpisode, player.currentTime, selectedBook, episodes, epIndex]);
 
   // 标签页标题跟随播放内容（PWA 切后台/多标签时可见当前章节）
   useEffect(() => {
