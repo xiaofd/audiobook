@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -302,11 +304,23 @@ func (d *MobileCloud) refreshToken(ctx context.Context) error {
 				defer resp.Body.Close()
 				body, _ := io.ReadAll(resp.Body)
 				var refreshResp tokenRefreshResp
-				if json.Unmarshal(body, &refreshResp) == nil && refreshResp.Return == "0" && refreshResp.Token != "" {
+				// 移动云盘 authTokenRefresh.do 返回 XML 报文：<root><return>0</return><token>...</token></root>
+				// 同时兼容 JSON 格式反序列化
+				var parseErr error
+				if strings.HasPrefix(strings.TrimSpace(string(body)), "<") {
+					parseErr = xml.Unmarshal(body, &refreshResp)
+				} else {
+					parseErr = json.Unmarshal(body, &refreshResp)
+				}
+				if parseErr == nil && refreshResp.Return == "0" && refreshResp.Token != "" {
 					d.authorization = base64.StdEncoding.EncodeToString([]byte(splits[0] + ":" + splits[1] + ":" + refreshResp.Token))
 					d.persistCfg(d.setCfgKeyLocked("authorization", d.authorization))
+					log.Printf("[MobileCloud] 令牌自动刷新成功: account=%s", splits[1])
 					return nil
 				}
+				log.Printf("[MobileCloud] 令牌刷新接口返回异常: code=%s, desc=%s, raw=%s", refreshResp.Return, refreshResp.Desc, string(body))
+			} else {
+				log.Printf("[MobileCloud] 令牌刷新网络请求失败: %v", err)
 			}
 		}
 	}

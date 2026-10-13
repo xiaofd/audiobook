@@ -1,5 +1,7 @@
 package mobilecloud
 
+import "encoding/xml"
+
 // 139 云盘 API 响应类型定义（参照 OpenList 的 drivers/<name>/types.go 组织方式）。
 
 // personalListResp /file/list 响应。
@@ -45,10 +47,12 @@ type downloadUrlResp struct {
 	} `json:"data"`
 }
 
-// tokenRefreshResp 令牌刷新接口响应。
+// tokenRefreshResp 令牌刷新接口响应（XML 格式：<root><return>0</return><token>...</token></root>）。
 type tokenRefreshResp struct {
-	Return string `json:"return"`
-	Token  string `json:"token"`
+	XMLName xml.Name `xml:"root"`
+	Return  string   `xml:"return" json:"return"`
+	Token   string   `xml:"token" json:"token"`
+	Desc    string   `xml:"desc" json:"desc"`
 }
 
 // loginResp 登录接口响应（getLoginInfo / login 共用）。
