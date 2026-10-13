@@ -100,10 +100,13 @@ func decryptString(enc string) (string, error) {
 // isSecretKey 判断配置键是否属于需加密的敏感字段。
 func isSecretKey(k string) bool {
 	kl := strings.ToLower(k)
-	for _, s := range []string{"password", "secret", "token", "cookie", "key", "authorization", "auth"} {
+	if kl == "authtype" || strings.HasSuffix(kl, "type") || strings.HasSuffix(kl, "mode") {
+		return false
+	}
+	for _, s := range []string{"password", "secret", "token", "cookie", "key", "authorization"} {
 		if strings.Contains(kl, s) {
 			return true
 		}
 	}
-	return false
+	return kl == "auth"
 }

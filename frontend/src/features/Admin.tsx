@@ -84,7 +84,9 @@ export default function Admin() {
       const merged: Record<string, string> = {};
       for (const field of f) {
         if (field.type === 'select' && field.options && field.options.length > 0) {
-          merged[field.name] = s.config?.[field.name] || field.options[0];
+          const raw = s.config?.[field.name];
+          // 容错：如果后端返回的值是脱敏的 ****** 或不在选项列表内，默认选中第一个选项（如 authorization）
+          merged[field.name] = (raw && field.options.includes(raw)) ? raw : field.options[0];
         } else if (field.type === 'password') {
           merged[field.name] = ''; // 敏感字段不显示明文
         } else {
@@ -274,8 +276,13 @@ export default function Admin() {
                           ))}
                         </select>
                       ) : (
-                        <input className={inputCls} placeholder={f.type === 'password' && editId ? '已配置，留空保持不变' : f.label} type={f.type === 'password' ? 'password' : 'text'}
-                          value={sConfig[f.name] || ''} onChange={e => setSConfig({ ...sConfig, [f.name]: e.target.value })} />
+                        <div>
+                          <input className={inputCls} placeholder={f.type === 'password' && editId ? '已配置（留空保持不变），粘贴新值可直接覆盖' : f.label} type={f.type === 'password' ? 'password' : 'text'}
+                            value={sConfig[f.name] || ''} onChange={e => setSConfig({ ...sConfig, [f.name]: e.target.value })} />
+                          {f.type === 'password' && editId && (
+                            <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1 font-medium">提示：如需更新令牌，直接在此输入框粘贴新值并保存即可覆盖</p>
+                          )}
+                        </div>
                       )}
                       {f.help && <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{f.help}</p>}
                     </div>
@@ -496,7 +503,12 @@ function fieldOptionLabel(fieldName: string, value: string): string {
 function fieldVisible(dependsOn: string, config: Record<string, string>): boolean {
   const [fieldName, values] = dependsOn.split('=');
   const allowed = (values || '').split('|');
-  return allowed.includes(config[fieldName] || '');
+  const curVal = config[fieldName];
+  // 容错：如果配置项是 ****** 或空，且依赖的是 authType，默认视为 authorization
+  if (fieldName === 'authType' && (!curVal || curVal === '******')) {
+    return allowed.includes('authorization');
+  }
+  return allowed.includes(curVal || '');
 }
 
 // 构建最终提交的配置：密码字段为空时提交 "******"（编辑时表示未修改，后端保留原值）
