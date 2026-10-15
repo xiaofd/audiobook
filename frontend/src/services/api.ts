@@ -60,6 +60,12 @@ export interface Episode { id: string; bookId: string; storageId: string; title:
 export async function listBooks(): Promise<Book[]> { return req('GET', '/api/books'); }
 export async function getBook(bookId: string): Promise<Book> { return req('GET', `/api/books/${bookId}`); }
 export async function listEpisodes(bookId: string): Promise<Episode[]> { return req('GET', `/api/books/${bookId}/episodes`); }
+export function isVideoFile(filePath: string): boolean {
+  if (!filePath) return false;
+  const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+  return ['.mp4', '.mkv', '.webm', '.m4v', '.mov'].includes(ext);
+}
+
 export function coverUrl(bookId: string): string { return `/api/books/${bookId}/cover?token=${tk() || ''}`; }
 export function streamUrl(episodeId: string): string { return `/api/episodes/${episodeId}/stream?token=${tk() || ''}`; }
 export async function updateBook(bookId: string, data: { title?: string; author?: string; cover?: string; description?: string }): Promise<Book> { return req('PUT', `/api/books/${bookId}`, data); }

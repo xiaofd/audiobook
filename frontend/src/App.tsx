@@ -289,8 +289,15 @@ export default function App() {
 
   return (
     <div className="h-dvh bg-slate-50 dark:bg-[#0b0f17] text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
-      {/* 常驻 audio 元素：不随视图切换卸载，保证后台持续播放；preload=auto 提前缓冲缓解弱网中断 */}
-      <audio ref={player.audioRef} preload="auto" />
+      {/* 常驻 media 媒体播放元素（采用 video，原生支持纯音频与所有标准视频），不随视图切换卸载 */}
+      <video
+        ref={player.audioRef as any}
+        preload="auto"
+        playsInline
+        webkit-playsinline="true"
+        x5-video-player-type="h5"
+        className="fixed -top-full -left-full w-1 h-1 opacity-0 pointer-events-none"
+      />
 
       <nav className="flex items-center justify-between px-4 sm:px-6 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] bg-white/80 dark:bg-[#0b0f17]/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 z-20">
         <div className="flex items-center gap-2 sm:gap-4">

@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Episode, saveProgress, streamUrl } from '../services/api';
 
+// Video-Audio 混合播放 Hook：使用 HTMLVideoElement（HTMLMediaElement 超集），
+// 纯音频或视频文件均无缝支持，视频状态下挂载至页面可视容器。
 export function usePlayer(onEndedCallback?: () => void) {
-  // audio 元素由 App 层常驻渲染（不随视图切换卸载），此处仅持有引用，
-  // 保证浏览书库/管理页时音频持续播放、返回播放页不假死。
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const mediaRef = useRef<HTMLVideoElement>(null);
+  const audioRef = mediaRef as unknown as React.RefObject<HTMLAudioElement | null>;
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);

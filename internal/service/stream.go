@@ -230,6 +230,17 @@ func mimeByExt(p string) string {
 	case ".gif":
 		return "image/gif"
 	}
+	// 视频类型
+	switch e {
+	case ".mp4", ".m4v":
+		return "video/mp4"
+	case ".mkv":
+		return "video/x-matroska"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	}
 	// 音频类型
 	switch e {
 	case ".mp3":
@@ -245,6 +256,6 @@ func mimeByExt(p string) string {
 	case ".wma":
 		return "audio/x-ms-wma"
 	default:
-		return "audio/mpeg"
+		return "application/octet-stream"
 	}
 }

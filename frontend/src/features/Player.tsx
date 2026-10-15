@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Episode, coverUrl, getProgress } from '../services/api';
-import { PlayIcon, PauseIcon, PrevIcon, NextIcon, BookCoverFallback, TimerIcon, RewindIcon, ForwardIcon, VolumeIcon, VolumeXIcon, QueueIcon, XIcon, BarsIcon, ChevronDownIcon } from '../components/icons';
+import { Episode, coverUrl, getProgress, isVideoFile } from '../services/api';
+import { PlayIcon, PauseIcon, PrevIcon, NextIcon, BookCoverFallback, TimerIcon, RewindIcon, ForwardIcon, VolumeIcon, VolumeXIcon, QueueIcon, XIcon, BarsIcon, ChevronDownIcon, MaximizeIcon, PipIcon } from '../components/icons';
 
 const QUEUE_PAGE = 100; // 队列抽屉分页（长书）
 
@@ -62,6 +62,33 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
     return () => clearInterval(id);
   }, [sleepEndsAt]);
   const sleepLeftSec = sleepEndsAt ? Math.max(0, Math.ceil((sleepEndsAt - now) / 1000)) : 0;
+
+  const isVideo = isVideoFile(currentEpisode?.filePath || '');
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+
+  // 全屏切换
+  const toggleFullScreen = () => {
+    const el = videoContainerRef.current || audioRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  };
+
+  // 画中画模式（PiP）
+  const togglePiP = async () => {
+    const video = audioRef.current as unknown as HTMLVideoElement;
+    if (!video) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else if (video.requestPictureInPicture) {
+        await video.requestPictureInPicture();
+      }
+    } catch {}
+  };
 
   const handleSetRate = (r: number) => {
     setPlaybackRate(r);
@@ -135,7 +162,38 @@ export default function PlayerView({ player, episodes, epIndex, bookTitle, onPla
           </button>
         </div>
 
-        <PlayerCover bookId={coverBookId} title={bookTitle} playing={playing} cover={cover} />
+        {/* 媒体展示层：视频模式渲染视频播放画幅与控制工具；音频模式渲染专辑黑胶封面 */}
+        {isVideo ? (
+          <div ref={videoContainerRef} className="relative w-full aspect-video bg-black rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center group/video">
+            <video
+              src={audioRef.current?.src}
+              className="w-full h-full object-contain cursor-pointer"
+              onClick={togglePlay}
+              playsInline
+              webkit-playsinline="true"
+              x5-video-player-type="h5"
+              onTimeUpdate={() => {
+                // 如果是直接挂载的独立视频视图，与全局 hook 同步进度
+                if (audioRef.current) {
+                  audioRef.current.currentTime = audioRef.current.currentTime;
+                }
+              }}
+            />
+            {/* 视频右上角快捷操作栏：画中画 + 全屏 */}
+            <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover/video:opacity-100 transition-opacity bg-black/60 backdrop-blur-md px-2.5 py-1.5 rounded-xl z-20">
+              {'pictureInPictureEnabled' in document && (
+                <button onClick={togglePiP} title="画中画模式" className="text-white/80 hover:text-white transition p-1">
+                  <PipIcon className="w-4 h-4" />
+                </button>
+              )}
+              <button onClick={toggleFullScreen} title="全屏播放" className="text-white/80 hover:text-white transition p-1">
+                <MaximizeIcon className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <PlayerCover bookId={coverBookId} title={bookTitle} playing={playing} cover={cover} />
+        )}
 
         <div className="text-center mt-8 w-full">
           <div className="text-xl font-bold truncate text-slate-900 dark:text-slate-100">{currentEpisode?.title || '未选择'}</div>

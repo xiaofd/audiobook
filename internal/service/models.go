@@ -10,11 +10,17 @@ import (
 	"time"
 )
 
-// 音频扩展名白名单。
-var audioExts = map[string]bool{
+// 媒体扩展名白名单（音频 + 常见视频）。
+var mediaExts = map[string]bool{
+	// 音频格式
 	".mp3": true, ".m4a": true, ".m4b": true, ".flac": true,
 	".wav": true, ".ogg": true, ".aac": true, ".opus": true, ".wma": true,
+	// 视频格式（MP4 / MKV / WebM / M4V / MOV）
+	".mp4": true, ".mkv": true, ".webm": true, ".m4v": true, ".mov": true,
 }
+
+// 音频扩展名白名单（兼容旧引用）。
+var audioExts = mediaExts
 
 // 封面扩展名白名单。
 var coverExts = map[string]bool{

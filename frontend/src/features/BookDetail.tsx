@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { type Book, type Episode, getProgress, updateBook, rescanBook, listEpisodes, coverUrl, uploadBookCover } from '../services/api';
-import { BookCoverFallback, PlayIcon } from '../components/icons';
+import { type Book, type Episode, getProgress, updateBook, rescanBook, listEpisodes, coverUrl, uploadBookCover, isVideoFile } from '../services/api';
+import { BookCoverFallback, PlayIcon, VideoIcon } from '../components/icons';
 import { toast } from '../components/Toast';
 
 const PAGE_SIZE = 50; // 目录分页：长书（千集级）按页管理，避免无限滚动难定位
@@ -184,7 +184,10 @@ export default function BookDetail({ book, episodes, onPlay, onBack, onBookUpdat
               <PlayIcon className="w-4 h-4 ml-0.5 absolute opacity-0 group-hover:opacity-100" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{ep.title}</div>
+              <div className="text-sm font-medium truncate text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center gap-1.5">
+                {isVideoFile(ep.filePath) && <VideoIcon className="w-3.5 h-3.5 text-indigo-500 shrink-0" />}
+                <span className="truncate">{ep.title}</span>
+              </div>
               {epDuration > 0 && <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">{fmt(epDuration)}</div>}
               {prog && prog.position > 0 && (
                 <div className="mt-1.5 flex items-center gap-2 max-w-xs">
